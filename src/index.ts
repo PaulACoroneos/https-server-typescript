@@ -1,5 +1,8 @@
 import express, { NextFunction, Request, Response } from 'express';
 import { config } from './config.js';
+import { BadRequestError, ForbiddenRequestError, UnauthorizedRequestError } from './errors.js';
+import { error } from 'console';
+import { createUser } from './db/queries/users.js';
 
 const app = express();
 const PORT = 8080;
@@ -27,7 +30,9 @@ const errorHandler = (
   next: NextFunction,
 ) => {
   console.log(err)
-  res.status(500).json({error: 'Something went wrong on our end'})
+  if(err instanceof BadRequestError || err instanceof ForbiddenRequestError || err instanceof UnauthorizedRequestError)
+    return res.status(err.statusCode).json({error: err.message})
+  return res.status(500).json({error: 'Internal Server Error'})
 }
 
 app.use(express.json());
@@ -57,7 +62,7 @@ app.post('/api/validate_chirp', (req, res, next) => {
   }
 
   if (parsedBody.body.length > 140) {
-    throw new Error('Chirp is too long')
+    throw new BadRequestError('Chirp is too long. Max length is 140')
   }
 
   const cleanedBody = parsedBody.body
@@ -69,6 +74,13 @@ app.post('/api/validate_chirp', (req, res, next) => {
 } catch(error) {
   next(error)
 }});
+
+app.post('/api/users', (req,res) => {
+  if(req.body?.email) {
+    const user = createUser(req.body.email)
+    return res.status(201).json(user)
+  }
+})
 
 // Uncomment for health check endpoint
 app.get('/api/healthz', (req, res) => {
